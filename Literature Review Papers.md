@@ -1,7 +1,6 @@
-Literature Tracking Spreadsheet
+### Literature Tracking Spreadsheet
 
-
-https://docs.google.com/spreadsheets/d/1AIvS_MhnGrPWRKrOBHwTzvh15Oux9gk9Hg6x9rD6eRY/edit?usp=sharing
+[Link to Google Sheet Literature Review Papers](https://docs.google.com/spreadsheets/d/1AIvS_MhnGrPWRKrOBHwTzvh15Oux9gk9Hg6x9rD6eRY/edit?usp=sharing)
 
 All paper notes, reading status, and annotations live in the spreadsheet above. 
 Each paper is tagged with:
