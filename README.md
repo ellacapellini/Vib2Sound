@@ -1,11 +1,10 @@
 # Adapting Vib2Sound to Missing Accelerometer Cues
 
 **Institute of Neuroinformatics (INI) — University of Zurich & ETH Zurich**
-**Supervisor / Lab:** R.H.R. Hahnloser Lab
-**Collaborators:** Mai Akahoshi · Yuhang Wang 
+**Supervisor / Lab:** R.H.R. Hahnloser Lab  Mai Akahoshi · Yuhang Wang 
 ---
 ## Overview
-This project extends [Vib2Sound](https://gitlab.switch.ch/hahnloser-songbird/birdpark/vib2sound) — a neural network system for separating overlapping zebra finch vocalisations using body-mounted accelerometer signals and multi-channel microphone recordings — to handle scenarios where **accelerometer cues are partially or entirely missing**.
+This project extends [Vib2Sound](https://gitlab.switch.ch/hahnloser-songbird/birdpark/vib2sound) — a neural network system for separating overlapping zebra finch vocalisations using body-mounted acceler. signals and multi-channel microphone recordings — to handle scenarios where **accelerometer cues are partially or entirely missing**.
 
 Vib2Sound was introduced in:
 > Akahoshi M., Wang Y., Cheng L., Zai A.T., Hahnloser R.H.R. (2025). *Vib2Sound: Separation of Multimodal Sound Sources*. bioRxiv. https://doi.org/10.1101/2025.05.08.652866
