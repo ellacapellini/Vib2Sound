@@ -1,84 +1,81 @@
 """
 Audio-Visual Correspondence (AVC) projection heads for CMC loss
-for TRAINING-ONLY.
-These modules are instantiated alongside the Vib2Sound model, used to compute CMCLoss and discarded at inference.
-Architecture background (from Akahoshi et al. Fig. 2):
-    - CNN (8 layers) processes mixture microphone spectograms
-    - Accelr. magnitude spectog. is conctatenated to CNN output 
-    - LSTM (1 layer) processes concatenation
-    - FC (2 LAYERS) prdicts soft masks <- tap here for AVCBlock
-    - soft masks applied to mic1 magnitude -> iSTFT
-CMC loss (Makishima eq.10) requires: 
-    - accel_embed : (B, T, D) from AccelEmbedder(accel_spectogram)
-    - audio_embed : (B, T, D) from AVCBlock(fc_output/pre_sigmoid mask)
-STFT param:
-FFT: 384 samples, hop: 96 samples, sr: 244414 Hz
-    - frequency bins (one-sided): 193
-    - acccel. is 200Hz high-pass filtered, same STFT setting    
+for TRAINING-ONLY (discardd at inference)
+i tried to match it exaclty to Vib2Sound_multichannel tensor shapes (from model_multichannel.py and config.yaml)
+    radio1_mag/radio2_mag : (B, T, 93) <- already (B, T, F) no permute needed
+    fc2 output (presigmoid): (B, T, 193) <- same shape, will be my AVCBlock input
+    n_fft = 384
+    num_freq = 193 (n_fft//2+1)
+    lstm_dim = 400 -> LSTM output = 2*400= 800 (bidirectional)
+    fc1_dm = 600
+    fc2_dm = 193 
+AVCBlock: (B, T, 193) -> (B, T, embed_dim) project presigmoid FC2 output 
+AccelEmbedder: (B, T, 193) -> (B, T, embed_dim) projects radio mag spectrogram 
+    
 """
 import torch
 import torch.nn as nn
 
 class AVCBlock(nn.Module):
     """
-    projects FC layer output (soft mask, pre-sigmoid) into shared embedding space where CMC loss operates
-    input: (B,T, n_freq)
-    output: (B, T, embed_dim)
-    this modules is shared across birds (following Makishima)= one instance handles both bird 1 nd 2
+    projects presigmoid FC2 output into the CMC embedding space.
+    Input:  (B, T, 193) —> raw FC2 output, before torch.sigmoid()
+    Output: (B, T, embed_dim)
+    shared across target and nontarget birds (Makishima et al. share weights
+    across speakers; so i think it's appropriate since both birds are same species).
     """
+
     def __init__(self, n_freq: int = 193, embed_dim: int = 128):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(n_freq, embed_dim),
             nn.Tanh(),
         )
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x) #(B, T, embed_dim)
+        return self.net(x)
 
 class AccelEmbedder(nn.Module):
     """
-    encodes accelr. magnitued spectro. into the same embedding space as AVCBlock
-    Input: (B, 1, n_freq_a, T)
-    output: (B, T, embed_dim)
+    projects accelr. magnitude spectr. into the same CMC embedding space as AVCBlock.
+    In Vib2Sound, radio_mag arrives from dataloader as (B, T, 193).
+    kept lightweight —> the accelr. is the reference anchor, not a rich encoder.
+    Input:  (B, T, 193)
+    Output: (B, T, embed_dim)
     """
-    def __init__(self, n_freq_q: int = 193, embed_dim: int = 128): 
+
+    def __init__(self, n_freq: int = 193, embed_dim: int = 128, hidden: int = 64):
         super().__init__()
-        self.conv = nn.Sequential(
-            #(B, 1, F, T) -> (B, 32, F, T)
-            nn.Conv2d(1, 32, kernel_size=(3, 3), padding=(1, 1)),
-            nn.ReLU(),
-            #(B, 32, F, T) -> (B, 64, F, T)
-            nn.Conv2d(32, 64, kernel_size=(3,3), padding=(1,1)),
-            nn.ReLu(),
-            #collapse freq. axis (B, 64, 1, T)
-            nn.AdaptiveAvgPool2d((1, None)),
+        #project frequency axis first
+        self.freq_proj = nn.Linear(n_freq, hidden)
+        #small temporal conv to capture shortrange dynamics
+        self.temporal = nn.Sequential(
+            nn.Conv1d(hidden, hidden, kernel_size=3, padding=1),
+            nn.ReLU(),      
         )
-        self.proj = nn.Linear(64, embed_dim)
-    def forward(self, x:torch.Tensor) -> torch.Tensor:
-        h = self.conv(x) #(B, 64, 1, T)
-        h = h.squeeze(2).permute(0, 2, 1) #(B, T, 64)
-        return self.proj(h) #(B, T, embed_dim)
-    
+        self.out_proj = nn.Linear(hidden, embed_dim)  
+ 
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = torch.relu(self.freq_proj(x)) #(B, T, hidden)
+        h = h.permute(0, 2, 1) #(B, hidden, T) for Conv1d
+        h = self.temporal(h) #(B, hidden, T)
+        h = h.permute(0, 2, 1) #(B, T, hidden)
+        return self.out_proj(h) #(B, T, embed_dim)
+
 def check_temporal_alignment(
     accel_embed: torch.Tensor,
     audio_embed: torch.Tensor,
     label: str = "",
 ) -> None:
     """
-    hard check both embed share the same (B, T, D)
-    calling it in the first training batch and then silent after.
-    should raise ValueError with a descriptive message if shape don't match
+    Hhardard check that accel and audio embed have = shape.
+    call once on the first training batch; raises ValueError if mismatch.
     """
     if accel_embed.shape != audio_embed.shape:
         raise ValueError(
-            f"[CMC{' ' + label if label else ''}] Shape mismatch:\n"
-            f"accel_embed: {tuple(accel_embed.shape)}\n"
-            f" audio_embed: {tuple(audio_embed.shape)}\n"
-            f"The time (T) and embed_dim (D) dimensions must match.\n"
-            f"Check that AccelEmbedder and AVCBlock use the same embed_dim,\n"
-            f"and that the STFT hop size produces the same T for both streams."
+            f"[CMC shape mismatch{' — ' + label if label else ''}]\n"
+            f"  accel_embed : {tuple(accel_embed.shape)}\n"
+            f"  audio_embed : {tuple(audio_embed.shape)}\n"
+            f"Both must be (B, T, embed_dim). "
+            f"Check embed_dim matches in AVCBlock and AccelEmbedder."
         )
-
-    
-    
-        

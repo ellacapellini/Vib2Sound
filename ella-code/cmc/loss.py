@@ -82,3 +82,4 @@ class CMCLoss(nn.Module):
             cos_pos=torch.stack(pos_sims).mean(),
             cos_neg=torch.stack(neg_sims).mean()
         )
+        
