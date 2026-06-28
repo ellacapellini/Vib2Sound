@@ -44,8 +44,8 @@ class CMCLoss(nn.Module):
     """
     def forward(
         self,
-        accel_embeds: list[torch.Tensor],
-        audio_embeds: list[torch.Tensor],
+        accel_embeds: list,
+        audio_embeds: list,
     ) -> CMCLossOutput:
         """args:
         accel_embdes = list of n tensors, each (B, T, D) outputs of accelEmbedder for each bird
@@ -58,33 +58,27 @@ class CMCLoss(nn.Module):
         assert N >= 2, "CMC loss requires at least 2 birds"
         device = accel_embeds[0].device
         total_loss = torch.tensor(0.0, device=device)
-        pos_sims: list[torch.Tensor] = []
-        neg_sims: list[torch.Tensor] = []
+        pos_sims = []
+        neg_sims = []
         for n in range(N):
-            cv = accel_embeds[n] #(B, T, D) accel embedding  bird n 
-            ca = audio_embeds[n] #(B, T, D) audio embedding bird n 
+            cv = accel_embeds[n] #(B, T, D) 
+            ca = audio_embeds[n] #(B, T, D) 
             # positive = same bird, cosine similairyt i want to MAXIMISE
             # cosine_similarity returns (B, T); take mean across batch and time 
-            pos = F.cosine_similarity(cv, ca, dim=1).mean() # scalar
+            pos = F.cosine_similarity(cv, ca, dim=-1).mean()
             pos_sims.append(pos)
-            # negative = other birds, cosine similairity i wnat to MINIMISE
-            for n_prime in range(N):
-                if n_prime == n:
-                    continue
-                ca_prime = audio_embeds[n_prime] #(B, T, D)
-                neg = F.cosine_similarity(cv, ca_prime, dim=-1).mean()
+            # negative pairs: others birs, what i want to Minimise
+            neg_sum = torch.Tensor(0.0, device=device)
+            for n2 in range(N):
+                if n2 ==n:
+                    continue 
+                neg = F.cosine_similarity(cv, audio_embeds[n2], dim=-1).mean()
                 neg_sims.append(neg)
-                # contribution to loss for bird n = push neg up (+), pull pos down (-)
-                neg_sum = sum(
-                    F.cosine_similarity(cv, audio_embeds[np_], dim=-1).mean()
-                    for np_ in range(N) if np_ != n
-                )
-                total_loss = total_loss + (neg_sum - pos)
-        mean_pos = torch.stack(pos_sims).mean()
-        mean_neg = torch.stack(neg_sims).mean()
-        
+                neg_sum = neg_sum + neg
+            #loss contribution_ maximis pos (-), minimise neg (+)
+            total_loss = total_loss + (neg_sum - pos)
         return CMCLossOutput(
             loss=total_loss,
-            cos_pos=mean_pos,
-            cos_neg=mean_neg,
+            cos_pos=torch.stack(pos_sims).mean(),
+            cos_neg=torch.stack(neg_sims).mean()
         )
