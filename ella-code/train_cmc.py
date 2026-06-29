@@ -35,7 +35,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# point Python at vib2sound-lab
+#point Python at vib2sound-lab
 REPO_ROOT  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LAB_PATH   = os.path.join(REPO_ROOT, "vib2sound-lab")
 ELLA_PATH  = os.path.dirname(os.path.abspath(__file__))
@@ -63,7 +63,7 @@ def get_device() -> torch.device:
     return torch.device("cpu")
 
 
-#expose presigmoid FC2 output for CMC (=)
+#subclass: expose presigmoid FC2 output for CMC (=)
 class Vib2Sound_multichannel_CMC(Vib2Sound_multichannel):
     """
     = to Vib2Sound_multichannel, but forward() additionally returns the pre-sigmoid FC2 outputs (raw_target, raw_nontarget) needed by AVCBlock.
@@ -103,11 +103,9 @@ def train_cmc(args, hp, hp_str):
     logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s  %(levelname)s  %(message)s")
-
     #data
     # generator.py re-reads args.config and uses "voc_cop_data/..." on every
-    # batch — all relative to vib2sound-lab/. I chdir there for the entire
-    # training run and make every external path absolute first.
+    # batch — all relative to vib2sound-lab/. I chdir there for the entire training run and make every external path absolute first.
     args.config         = os.path.abspath(args.config)
     args.checkpoint_dir = os.path.abspath(args.checkpoint_dir)
     args.log_dir        = os.path.abspath(args.log_dir)
@@ -123,7 +121,6 @@ def train_cmc(args, hp, hp_str):
     model = Vib2Sound_multichannel_CMC(hp).to(device)
     n_freq    = hp.audio.num_freq          #193
     embed_dim = args.embed_dim             #def 128
-
     avc_block      = AVCBlock(n_freq=n_freq, embed_dim=embed_dim).to(device)
     accel_embedder = AccelEmbedder(n_freq=n_freq, embed_dim=embed_dim).to(device)
     cmc_loss_fn    = CMCLoss()
@@ -155,8 +152,12 @@ def train_cmc(args, hp, hp_str):
     os.makedirs(args.log_dir, exist_ok=True)
     os.makedirs(args.checkpoint_dir, exist_ok=True)
     writer = MyWriter(hp, args.log_dir)
+    
+    ##!! CSV trainig log
+
 
     #training loop 
+    import datatime as _dt
     criterion = nn.MSELoss()
     first_batch = True
 
