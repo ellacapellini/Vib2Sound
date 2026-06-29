@@ -154,7 +154,16 @@ def train_cmc(args, hp, hp_str):
     writer = MyWriter(hp, args.log_dir)
     
     ##!! CSV trainig log
-
+    #one CSV x run, append to if resuming. Columns should amtch terminal
+    import csv as _csv
+    csv_path = os.path.join(args.log_dir, "training_log.csv")
+    _csv_fields = ["timestamp", "step", "loss_total", "loss_mse", "loss_cmc", "cos_pos", "cos_neg"]
+    _write_csv_header = not os.path.exists(csv_path) #don't rewrite header on resume
+    _csv_fh = open(csv_path, "a", newline="")
+    _csv_writer = _csv.DictWriter(_csv_fh, fieldnames=_csv_fields)
+    if _write_csv_header:
+        _csv_writer.writeheader()
+    logger.info(f"Training log (CSV): {csv_path}")
 
     #training loop 
     import datatime as _dt
@@ -181,14 +190,11 @@ def train_cmc(args, hp, hp_str):
                 mask_target, mask_nontarget, raw_target, raw_nontarget = model(
                     mixed_mag, mixed_phase, radio1_mag, radio2_mag
                 )
-                #All four: (B, T, 193)
-
-                #MSE loss (= to original train.py)
+                #All four: (B, T, 193) MSE loss (= to original train.py)
                 #apply mask to first mic channel: mixed_mag[:, 0, :, :] = (B, T, 193)
                 mixed_mag_ch0 = mixed_mag[:, 0, :, :]       # (B, T, 193)
                 output_target    = mixed_mag_ch0 * mask_target
                 output_nontarget = mixed_mag_ch0 * mask_nontarget
-
                 loss_mse = (criterion(output_target,    target_mag) +
                             criterion(output_nontarget, nontarget_mag))
 
@@ -196,11 +202,9 @@ def train_cmc(args, hp, hp_str):
                 #accelr. embed.  input already (B, T, 193)
                 cv1 = accel_embedder(radio1_mag)   # (B, T, embed_dim)
                 cv2 = accel_embedder(radio2_mag)   # (B, T, embed_dim)
-
                 #audio embed.  from presigmoid FC2 output (B, T, 193)
                 ca1 = avc_block(raw_target)        # (B, T, embed_dim)
                 ca2 = avc_block(raw_nontarget)     # (B, T, embed_dim)
-
                 #shape check on first batch only
                 if first_batch:
                     check_temporal_alignment(cv1, ca1, "bird1")
@@ -239,6 +243,18 @@ def train_cmc(args, hp, hp_str):
                         f"cos+ {cmc_out.cos_pos.item():.3f} | "
                         f"cos- {cmc_out.cos_neg.item():.3f}"
                     )
+                    ##!! wirte = values to CSV (one row x logged step)
+                    _csv_writer.writerow({
+                        "timestamp":  _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "step":       step,
+                        "loss_total": round(loss_val, 6),
+                        "loss_mse":   round(loss_mse.item(), 6),
+                        "loss_cmc":   round(cmc_out.loss.item(), 6),
+                        "cos_pos":    round(cmc_out.cos_pos.item(), 6),
+                        "cos_neg":    round(cmc_out.cos_neg.item(), 6),
+                    })
+                    _csv_fh.flush()
+                
                 #checkpoint
                 if step % hp.train.checkpoint_interval == 0:
                     save_path = os.path.join(
