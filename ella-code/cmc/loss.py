@@ -68,7 +68,7 @@ class CMCLoss(nn.Module):
             pos = F.cosine_similarity(cv, ca, dim=-1).mean()
             pos_sims.append(pos)
             # negative pairs: others birs, what i want to Minimise
-            neg_sum = torch.Tensor(0.0, device=device)
+            neg_sum = torch.tensor(0.0, device=device)
             for n2 in range(N):
                 if n2 ==n:
                     continue 
