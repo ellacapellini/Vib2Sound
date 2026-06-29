@@ -20,9 +20,9 @@ Batch tuple from dataloader (confirmed from dataloader.py):
 
 Model forward (Vib2Sound_multichannel):
     input : mixed_mag, mixed_phase, radio1_mag, radio2_mag
-    output: mask_target (B,T,193), mask_nontarget (B,T,193)  ← postsigmoid
+    output: mask_target (B,T,193), mask_nontarget (B,T,193)-postsigmoid
  subclass (Vib2Sound_multichannel_CMC) also returns:
-            raw_target (B,T,193), raw_nontarget (B,T,193)   ← presigmoid
+            raw_target (B,T,193), raw_nontarget (B,T,193)-presigmoid
 """
 
 import os
@@ -35,7 +35,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# ── point Python at vib2sound-lab ─────────────────────────────────────────
+# point Python at vib2sound-lab
 REPO_ROOT  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LAB_PATH   = os.path.join(REPO_ROOT, "vib2sound-lab")
 ELLA_PATH  = os.path.dirname(os.path.abspath(__file__))
@@ -106,7 +106,7 @@ def train_cmc(args, hp, hp_str):
 
     #data
     # generator.py re-reads args.config and uses "voc_cop_data/..." on every
-    # batch — all relative to vib2sound-lab/. We chdir there for the entire
+    # batch — all relative to vib2sound-lab/. I chdir there for the entire
     # training run and make every external path absolute first.
     args.config         = os.path.abspath(args.config)
     args.checkpoint_dir = os.path.abspath(args.checkpoint_dir)
