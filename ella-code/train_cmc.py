@@ -166,7 +166,7 @@ def train_cmc(args, hp, hp_str):
     logger.info(f"Training log (CSV): {csv_path}")
 
     #training loop 
-    import datatime as _dt
+    import datetime as _dt
     criterion = nn.MSELoss()
     first_batch = True
 
